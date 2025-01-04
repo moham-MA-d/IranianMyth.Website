@@ -15,31 +15,17 @@ const App = () => {
     loadData();
   }, []);
 
-  // Function to send updated nodes to the backend
-  const saveDiagram = async (updatedNodes) => {
-    try {
-      const response = await fetch("http://localhost:5000/roots/saveDiagram", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nodes: updatedNodes }),
-      });
-      if (!response.ok) throw new Error("Failed to save data");
-      const result = await response.json();
-      console.log("Save Successful:", result);
-      alert("Diagram saved successfully!");
-    } catch (error) {
-      console.error("Error saving diagram:", error);
-      alert("Failed to save diagram.");
-    }
-  };
-
-  console.log("NL ", nodes);
+  console.log("nodes ", nodes);
+  console.log("links ", links);
   return (
     <div style={{background:'#000'}}>
       <h1>Mythological Diagram</h1>
 
       <h2>Nodes Data</h2>
-      <DiagramComponent nodes={nodes} links={links} saveHandler={saveDiagram} />
+      <DiagramComponent 
+      nodes={nodes} 
+      links={links} 
+      />
     </div>
   );
 };

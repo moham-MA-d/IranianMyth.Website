@@ -17,15 +17,27 @@ const DetailModal = ({ id, isOpen, onClose, title, imageUrl, description, isLink
       const response = await fetch(`http://localhost:5000/roots/${endpoint}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           id: id,
           name: editedTitle,
           description: editedDescription
         }),
       });
       let res = await response.json();
+      console.log("RES: ", res);
       if (!res.isSuccess) throw new Error(res.message);
-      onClose(); // Close modal after successful save
+
+      // Notify parent component with the updated data
+      if (onSave) {
+        onSave({
+          id: id,
+          name: editedTitle,
+          description: editedDescription,
+          isLink: isLink,
+        });
+      }
+
+      //onClose(); // Close modal after successful save
       alert(res.message);
     } catch (error) {
       alert(error.message || "An error occurred while saving");
@@ -62,7 +74,7 @@ const DetailModal = ({ id, isOpen, onClose, title, imageUrl, description, isLink
           )}
           <div className="description">
             {isDevMode ? (
-              <textarea
+              <textarea 
                 value={editedDescription}
                 onChange={(e) => setEditedDescription(e.target.value)}
                 className="editable-description"

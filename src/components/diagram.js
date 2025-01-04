@@ -180,17 +180,18 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
       )
     );
 
+    const decimalCound = 5;
     // Custom converter functions for handling location with 3 decimal places
     function parseLocation(str) {
       const pt = go.Point.parse(str);
       return new go.Point(
-        Number(pt.x.toFixed(2)),
-        Number(pt.y.toFixed(2))
+        Number(pt.x.toFixed(decimalCound)),
+        Number(pt.y.toFixed(decimalCound))
       );
     }
 
     function stringifyLocation(pt) {
-      return `${Number(pt.x).toFixed(2)} ${Number(pt.y).toFixed(2)}`;
+      return `${Number(pt.x).toFixed(decimalCound)} ${Number(pt.y).toFixed(decimalCound)}`;
     }
 
     myDiagram.nodeTemplate = $(
@@ -222,19 +223,35 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
     myDiagram.linkTemplate = $(
       go.Link,
       {
-        routing: go.Link.AvoidsNodes,
+        routing: go.Link.AvoidsNodes, // Adjust as needed (Straight or AvoidsNodes)
         corner: 5,
         relinkableFrom: true,
         relinkableTo: true,
+        reshapable: true, // Allow reshaping
+        resegmentable: true, // Allow resegmenting
+        // Enable dragging of the entire link
+        mouseDragEnter: function (e, link) {
+          link.isSelected = true;
+        },
+        mouseDragLeave: function (e, link) {
+          link.isSelected = false;
+        },
       },
-      $(go.Shape, { strokeWidth: 2 }, new go.Binding("stroke", "color")),
+      $(go.Shape, { strokeWidth: 2 }, new go.Binding("stroke", "relation", getRelationColor)),
       $(go.Shape, { toArrow: "Standard" }),
       $(
         go.TextBlock,
-        { segmentOffset: new go.Point(0, -10) },
+        {
+          visible: false, 
+          segmentOffset: new go.Point(0, -10)
+        },
         new go.Binding("text", "relation")
-      )
+      ),
+      // Bind the points property to apply the coordinates
+      new go.Binding("points").makeTwoWay(),
+
     );
+
 
     // Add listeners for various events
     myDiagram.addDiagramListener("SelectionMoved", function (e) {
@@ -242,7 +259,7 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
         if (part instanceof go.Node && part.data) {
           // Extracting node information
           const nodeData = part.data; // The data object from your node
-          OnNodeMoved(nodeData);
+          OnNodeMoved(nodeData, part.linksConnected);
         } else if (part instanceof go.Link) {
           // It's a link
           //console.log("Link moved nodeData:", part.data);
@@ -250,9 +267,39 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
       });
     });
 
-    myDiagram.addDiagramListener("LinkRelinked", function (e) {
-      console.log("LinkRelinked");
+    myDiagram.addDiagramListener("LinkDrawn", function (e) {
+
+      // Get the link that was just drawn
+      const link = e.subject;
+
+      // Get the source and target nodes
+      const sourceNode = link.fromNode;
+      const targetNode = link.toNode;
+
+      if (sourceNode && targetNode) {
+        // Extract node data (modify according to your node model)
+        const sourceId = sourceNode.data.id; // Data of the source node
+        const targetId = targetNode.data.id; // Data of the target node
+
+        OnLinkDrawn(sourceId, targetId);
+      }
     });
+
+    myDiagram.addDiagramListener("LinkReshaped", function (e) {
+      const link = e.subject; // The reshaped link
+      const sourceNodeId = link.fromNode.data.id;
+      const targetNodeId = link.toNode.data.id;
+
+      // Get the updated points
+      const updatedPoints = [];
+      link.points.each((point) => {
+        updatedPoints.push({ x: point.x, y: point.y });
+      });
+
+      // Send the updated points to the server
+      OnLinkReshaped(sourceNodeId, targetNodeId, updatedPoints);
+    });
+
 
     myDiagram.addDiagramListener("SelectionDeleted", function (e) {
       e.subject.each(function (part) {
@@ -301,8 +348,12 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
       }
     });
 
+
     // Assign the model
     myDiagram.model = new go.GraphLinksModel(nodes, links);
+
+    // Set `id` as the key for links
+    myDiagram.model.linkKeyProperty = "id";
 
     // Store diagram reference
     diagramRef.current = myDiagram;
@@ -318,31 +369,57 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
     };
   }, [nodes, links, saveHandler, isEditMode]);
 
-  const OnNodeMoved = async (node) => {
-    try {
-      const response = await fetch("http://localhost:5000/roots/moveNode", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: node.id, loc: node.loc }),
-      });
-      let res = await response.json();
-      if (!res.isSuccess) throw new Error(res.message);
-    } catch (error) {
-      alert(error);
-    }
-  };
 
-  const OnLinkDeleted = async (linkId) => {
+  const OnLinkReshaped = async (sourceNodeId, targetNodeId, points) => {
     try {
-      const response = await fetch("http://localhost:5000/roots/deleteLink", {
-        method: "DELETE",
+      const response = await fetch("http://localhost:5000/roots/reshapeLink", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: linkId }),
+        body: JSON.stringify({
+          sourceNodeId: sourceNodeId,
+          targetNodeId: targetNodeId,
+          points: points,
+        }),
       });
       let res = await response.json();
       if (!res.isSuccess) throw new Error(res.message);
       const result = await response.json();
-      alert(res.message);
+    } catch (error) {
+      alert(error);
+    }
+  }
+
+  const OnNodeMoved = async (node, linksConnected) => {
+    try {
+
+
+      // Prepare the updated links data
+      const updatedLinks = [];
+      linksConnected.each((link) => {
+        const points = [];
+        link.points.each((point) => points.push({ x: point.x, y: point.y }));
+        updatedLinks.push({
+          id: link.data.id, // Link ID
+          from: link.data.from, // Source node ID
+          to: link.data.to, // Target node ID
+          points: points, // Updated points
+        });
+      });
+
+      console.log("updatedLinks: ", updatedLinks);
+
+
+      const response = await fetch("http://localhost:5000/roots/moveNode", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nodeId: node.id, // Node data
+          nodeLoc: node.loc, // Node data
+          links: updatedLinks, // Updated links data
+        }),
+      });
+      let res = await response.json();
+      if (!res.isSuccess) throw new Error(res.message);
     } catch (error) {
       alert(error);
     }
@@ -378,19 +455,73 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
     }
   };
 
-  const handleSave = () => {
-    const updatedNodes = diagramRef.current.model.nodeDataArray.map((node) => ({
-      id: node.id,
-      loc: node.loc, // New location
-      name: node.name,
-    }));
+  const OnLinkDeleted = async (linkId) => {
+    try {
+      const response = await fetch("http://localhost:5000/roots/deleteLink", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: linkId }),
+      });
+      let res = await response.json();
+      if (!res.isSuccess) throw new Error(res.message);
+      const result = await response.json();
+      alert(res.message);
+    } catch (error) {
+      alert(error);
+    }
+  };
 
-    const updatedLinks = diagramRef.current.model.linkDataArray.map((link) => ({
-      id: link.id,
-      isDelete: link, // i need help in here
-    }));
+  const OnLinkDrawn = async (sourceId, targetId) => {
+    try {
+      const response = await fetch("http://localhost:5000/roots/drawLink", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceId: sourceId, targetId: targetId }),
+      });
+      let res = await response.json();
+      if (!res.isSuccess) throw new Error(res.message);
+      const result = await response.json();
+      alert(res.message);
+    } catch (error) {
+      alert(error);
+    }
+  };
 
-    saveHandler(updatedNodes, updatedLinks); // Call the save handler passed as a prop
+  const getRelationColor = (relation) => {
+    switch (relation) {
+      case "mrig":
+        return "blue"; 
+      case "prnt":
+        return "green"; 
+      case "empl":
+        return "yellow"; 
+      case "frnd":
+        return "purple"; 
+      case "enmy":
+        return "red"; 
+      case "adpt":
+        return "gray";
+      default:
+        return "black"; 
+    }
+  };
+
+
+  // Function to handle changes from the DetailModal
+  const handleDetailModalSave = ({ id, name, description, isLink }) => {
+    if (isLink) {
+      const link = diagramRef.current.model.findLinkDataForKey(id);
+      if (link) {
+        diagramRef.current.model.setDataProperty(link, "name", name);
+        diagramRef.current.model.setDataProperty(link, "description", description);
+      }
+    } else {
+      const node = diagramRef.current.model.findNodeDataForKey(id);
+      if (node) {
+        diagramRef.current.model.setDataProperty(node, "name", name);
+        diagramRef.current.model.setDataProperty(node, "description", description);
+      }
+    }
   };
 
   return (
@@ -412,15 +543,10 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
         imageUrl={modalData.imageUrl}
         description={modalData.description}
         isLink={modalData.isLink}
+        onSave={handleDetailModalSave} // Pass the updated save handler
+
       />
-      {isEditMode && (
-        <button
-          onClick={handleSave}
-          style={{ marginTop: "10px", padding: "5px 10px" }}
-        >
-          Save Changes
-        </button>
-      )}
+
     </div>
   );
 };
