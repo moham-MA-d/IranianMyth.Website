@@ -65,7 +65,8 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
         {
           layout: new PoolLayout(),
           layerName: "Background",
-          movable: isEditMode,
+          movable: false,
+          dragComputation: () => null, // Disable dragging computation
           selectable: isEditMode,
         },
         $(go.Shape, "Rectangle", {
@@ -101,7 +102,8 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
           computesBoundsIncludingLinks: false,
           computesBoundsIncludingLocation: true,
           handlesDragDropForMembers: isEditMode,
-          movable: isEditMode,
+          movable: false,
+          dragComputation: () => null, // Disable dragging computation
           selectable: isEditMode,
           layout: $(go.GridLayout, {
             wrappingColumn: 1,
@@ -207,8 +209,8 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
       $(go.Shape, "Rectangle", {
         fill: "white",
         portId: "",
-        fromLinkable: true,
-        toLinkable: true,
+        fromLinkable: false,
+        toLinkable: false,
       }),
       $(
         go.Panel,
@@ -217,7 +219,56 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
           desiredSize: new go.Size(110, 110),
         }).bind("source", "image"),
         $(go.TextBlock, { margin: 5 }).bind("text", "name")
-      )
+      ),
+      // Define ports
+      $(go.Shape, "Circle", {
+        portId: "T", // Top port
+        alignment: go.Spot.Top,
+        fromSpot: go.Spot.Top,
+        toSpot: go.Spot.Top,
+        fromLinkable: true,
+        toLinkable: true,
+        width: 10,
+        height: 10,
+        fill: "transparent", // Can be styled for visibility
+        strokeWidth: 0,
+      }),
+      $(go.Shape, "Circle", {
+        portId: "L", // Left port
+        alignment: go.Spot.Left,
+        fromSpot: go.Spot.Left,
+        toSpot: go.Spot.Left,
+        fromLinkable: true,
+        toLinkable: true,
+        width: 10,
+        height: 10,
+        fill: "transparent",
+        strokeWidth: 0,
+      }),
+      $(go.Shape, "Circle", {
+        portId: "R", // Right port
+        alignment: go.Spot.Right,
+        fromSpot: go.Spot.Right,
+        toSpot: go.Spot.Right,
+        fromLinkable: true,
+        toLinkable: true,
+        width: 10,
+        height: 10,
+        fill: "transparent",
+        strokeWidth: 0,
+      }),
+      $(go.Shape, "Circle", {
+        portId: "B", // Bottom port
+        alignment: go.Spot.Bottom,
+        fromSpot: go.Spot.Bottom,
+        toSpot: go.Spot.Bottom,
+        fromLinkable: true,
+        toLinkable: true,
+        width: 10,
+        height: 10,
+        fill: "transparent",
+        strokeWidth: 0,
+      })
     );
 
     myDiagram.linkTemplate = $(
@@ -237,12 +288,14 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
           link.isSelected = false;
         },
       },
+      new go.Binding("fromSpot", "fromSpot", go.Spot.parse),
+      new go.Binding("toSpot", "toSpot", go.Spot.parse),
       $(go.Shape, { strokeWidth: 2 }, new go.Binding("stroke", "relation", getRelationColor)),
       $(go.Shape, { toArrow: "Standard" }),
       $(
         go.TextBlock,
         {
-          visible: false, 
+          visible: false,
           segmentOffset: new go.Point(0, -10)
         },
         new go.Binding("text", "relation")
@@ -256,6 +309,21 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
     // Add listeners for various events
     myDiagram.addDiagramListener("SelectionMoved", function (e) {
       e.subject.each(function (part) {
+
+        // Check if the selection contains a lane or pool
+        const hasLaneOrPool = e.diagram.selection.any(function (part) {
+          return part instanceof go.Group && part.data.category; // Check for lane or pool
+        });
+
+        if (hasLaneOrPool) {
+          return; // Skip processing if a lane or pool is part of the selection
+        }
+
+        //prevent call move for nodes when pool or lanes are moved.
+        if (part.data.category) {
+          return;
+        }
+
         if (part instanceof go.Node && part.data) {
           // Extracting node information
           const nodeData = part.data; // The data object from your node
@@ -482,6 +550,7 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
       if (!res.isSuccess) throw new Error(res.message);
       const result = await response.json();
       alert(res.message);
+      console.log(result);
     } catch (error) {
       alert(error);
     }
@@ -490,22 +559,21 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
   const getRelationColor = (relation) => {
     switch (relation) {
       case "mrig":
-        return "blue"; 
+        return "blue";
       case "prnt":
-        return "green"; 
+        return "green";
       case "empl":
-        return "yellow"; 
+        return "yellow";
       case "frnd":
-        return "purple"; 
+        return "purple";
       case "enmy":
-        return "red"; 
+        return "red";
       case "adpt":
         return "gray";
       default:
-        return "black"; 
+        return "black";
     }
   };
-
 
   // Function to handle changes from the DetailModal
   const handleDetailModalSave = ({ id, name, description, isLink }) => {

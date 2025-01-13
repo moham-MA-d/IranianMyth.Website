@@ -19,9 +19,7 @@ const App = () => {
   console.log("links ", links);
   return (
     <div style={{background:'#000'}}>
-      <h1>Mythological Diagram</h1>
-
-      <h2>Nodes Data</h2>
+     
       <DiagramComponent 
       nodes={nodes} 
       links={links} 
