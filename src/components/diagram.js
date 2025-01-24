@@ -198,31 +198,77 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
 
     myDiagram.nodeTemplate = $(
       go.Node,
-      "Auto",
+      "Auto",  // "Auto" panel so the Shape always surrounds the content (Picture + TextBlock)
       {
         locationSpot: go.Spot.Center, // Ensures the location is the center of the node
-        isLayoutPositioned: false, // Prevent layout from overriding locations
+        isLayoutPositioned: false,    // Prevent layout from overriding locations
       },
-      new go.Binding("location", "loc", parseLocation).makeTwoWay(
-        stringifyLocation
+      // Bind node's position
+      new go.Binding("location", "loc", parseLocation).makeTwoWay(stringifyLocation),
+    
+      // 1) Main shape (round or square, large or small) based on `node.data.style`
+      $(
+        go.Shape,
+        {
+          // this shape is the "main port"
+          portId: "",
+          fill: "white",
+          stroke: "black",
+          fromLinkable: true,
+          toLinkable: true,
+        },
+        // Pick "Ellipse" if style includes "round", else "Rectangle"
+        new go.Binding("figure", "shape", style =>
+          style?.includes("round") ? "Ellipse" : "Rectangle"
+        ),
+        // Pick 110×110 if style includes "large", else 60×60
+        new go.Binding("desiredSize", "shape", style => {
+          switch (style) {
+            case "box-large":
+              return new go.Size(110, 140);
+            case "box-medium":
+              return new go.Size(80, 110);
+            case "box-small":
+              return new go.Size(50, 80);
+            default:
+              return new go.Size(60, 60);  // default size if no match
+          }
+        }),
+        
+        
+        // Adjust stroke width for large shapes (optional)
+        new go.Binding("strokeWidth", "shape", style =>
+          style?.includes("large") ? 1 : 1
+        )
       ),
-      $(go.Shape, "Rectangle", {
-        fill: "white",
-        portId: "",
-        fromLinkable: false,
-        toLinkable: false,
-      }),
+    
+      // 2) Panel holding the Picture + TextBlock
       $(
         go.Panel,
         "Vertical",
-        $(go.Picture, {
-          desiredSize: new go.Size(110, 110),
-        }).bind("source", "image"),
-        $(go.TextBlock, { margin: 5 }).bind("text", "name")
+        { margin: 5 },
+        $(
+          go.Picture,
+          // Default or small
+          {
+            desiredSize: new go.Size(40, 40),
+          },
+          new go.Binding("source", "image"),
+          // If style is "large", use bigger picture
+          new go.Binding("desiredSize", "shape", style =>
+            style?.includes("large") ? new go.Size(80, 80) : new go.Size(40, 40)
+          )
+        ),
+        $(
+          go.TextBlock,
+          { margin: 5 },
+          new go.Binding("text", "name")
+        )
       ),
-      // Define ports
+    
+      // 3) Define your four port circles (Top, Left, Right, Bottom)
       $(go.Shape, "Circle", {
-        portId: "T", // Top port
+        portId: "T",            // Top port
         alignment: go.Spot.Top,
         fromSpot: go.Spot.Top,
         toSpot: go.Spot.Top,
@@ -230,11 +276,11 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
         toLinkable: true,
         width: 10,
         height: 10,
-        fill: "transparent", // Can be styled for visibility
+        fill: "transparent",    // can style for visibility
         strokeWidth: 0,
       }),
       $(go.Shape, "Circle", {
-        portId: "L", // Left port
+        portId: "L",            // Left port
         alignment: go.Spot.Left,
         fromSpot: go.Spot.Left,
         toSpot: go.Spot.Left,
@@ -246,7 +292,7 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
         strokeWidth: 0,
       }),
       $(go.Shape, "Circle", {
-        portId: "R", // Right port
+        portId: "R",            // Right port
         alignment: go.Spot.Right,
         fromSpot: go.Spot.Right,
         toSpot: go.Spot.Right,
@@ -258,7 +304,7 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
         strokeWidth: 0,
       }),
       $(go.Shape, "Circle", {
-        portId: "B", // Bottom port
+        portId: "B",            // Bottom port
         alignment: go.Spot.Bottom,
         fromSpot: go.Spot.Bottom,
         toSpot: go.Spot.Bottom,
@@ -270,6 +316,7 @@ const DiagramComponent = ({ nodes, links, saveHandler }) => {
         strokeWidth: 0,
       })
     );
+    
 
     myDiagram.linkTemplate = $(
       go.Link,
