@@ -3,11 +3,13 @@ import './DetailModal.css';
 
 const DetailModal = ({ id, isOpen, onClose, title, imageUrl, description, isLink, onSave }) => {
   const [editedTitle, setEditedTitle] = useState(title);
+  const [editedId, setEditedId] = useState(id);
   const [editedDescription, setEditedDescription] = useState(description);
   const isDevMode = process.env.REACT_APP_ALLOW_EDIT === 'true';
 
   useEffect(() => {
     setEditedTitle(title);
+    setEditedId(id);
     setEditedDescription(description);
   }, [title, description]);
 
@@ -19,6 +21,7 @@ const DetailModal = ({ id, isOpen, onClose, title, imageUrl, description, isLink
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: id,
+          editedId: editedId,
           name: editedTitle,
           description: editedDescription
         }),
@@ -30,7 +33,7 @@ const DetailModal = ({ id, isOpen, onClose, title, imageUrl, description, isLink
       // Notify parent component with the updated data
       if (onSave) {
         onSave({
-          id: id,
+          id: editedId,
           name: editedTitle,
           description: editedDescription,
           isLink: isLink,
@@ -51,12 +54,24 @@ const DetailModal = ({ id, isOpen, onClose, title, imageUrl, description, isLink
       <div className="modal-content" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           {isDevMode ? (
-            <input
-              type="text"
-              value={editedTitle}
-              onChange={(e) => setEditedTitle(e.target.value)}
-              className="editable-title"
-            />
+            <div>
+              <div>
+                <input
+                  type="text"
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  className="editable-txt"
+                />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  value={editedId}
+                  onChange={(e) => setEditedId(e.target.value)}
+                  className="editable-txt"
+                />
+              </div>
+            </div>
           ) : (
             <h2>{title}</h2>
           )}
@@ -74,7 +89,7 @@ const DetailModal = ({ id, isOpen, onClose, title, imageUrl, description, isLink
           )}
           <div className="description">
             {isDevMode ? (
-              <textarea 
+              <textarea
                 value={editedDescription}
                 onChange={(e) => setEditedDescription(e.target.value)}
                 className="editable-description"
